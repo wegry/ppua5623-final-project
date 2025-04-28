@@ -1,0 +1,146 @@
+---
+title: "eda"
+output: html_document
+---
+
+```{r setup}
+library(readxl)
+library(tidyverse)
+
+fp <- "./february_generator2025.xlsx"
+
+# data pulled from https://www.eia.gov/electricity/data/eia860m/
+df <- read_excel(fp, skip = 2) |>
+  tibble() |>
+  select(-matches("Column\\d+"))
+
+df2 <- read_excel(fp, sheet = "Planned", skip = 2) |>
+  tibble() |>
+  select(-matches("Column\\d+"))
+
+df3 <- read_excel(fp, sheet = "Retired", skip = 2) |>
+  tibble() |>
+  select(-matches("Column\\d+")) |>
+  filter(`Retirement Year` >= 2010)
+```
+
+```{r}
+names(df)
+names(df2)
+names(df3)
+```
+
+```{r merge complete and planned battery generators}
+joined_columns <- c(
+  # shared
+  "Entity ID", "Entity Name", "Plant ID", "Plant Name", "Plant State", "County", "Balancing Authority Code", "Nameplate Capacity (MW)", "Technology", "Energy Source Code",
+  # Operating
+  "Operating Year", "Operating Month",
+  # Planned
+  "Planned Operation Month", "Planned Operation Year",
+  # Shared
+  "Latitude", "Longitude", "Status", "Prime Mover Code", "Energy Source Code",
+  # Retired
+  "Retirement Year", "Retirement Month",
+  # Operating
+  "Planned Retirement Year", "Planned Retirement Month",
+  # Shared
+  "Prime Mover Code"
+)
+merged_df <- df |>
+  select(any_of(joined_columns)) |>
+  bind_rows(df2 |> select(any_of(joined_columns))) |>
+  bind_rows(df3 |> select(any_of(joined_columns))) |>
+  filter(
+    (`Latitude` < 90 & `Latitude` > -90) &
+      !is.na(`Nameplate Capacity (MW)`) &
+      # `Technology` == "Batteries" &
+      # (`Energy Source Code` %in% c("NG", "SUN", "WND", "WAT", "GEO", "MWH")) &
+      # `Status` %in% c(
+      #   "(TS) Construction complete, but not yet in commercial operation",
+      #   "(OP) Operating",
+      #   "(V) Under construction, more than 50 percent complete",
+      #   "(U) Under construction, less than or equal to 50 percent complete"
+      # ) &
+      !(`Plant State` %in% c("AK", "HI", "PR"))
+  )
+```
+
+```{r}
+merged_df |>
+  group_by(
+    # `Prime Mover Code`
+    # `Energy Source Code`
+    # `Technology`
+    `Status`
+  ) |>
+  summarize(capacity = sum(`Nameplate Capacity (MW)`)) |>
+  arrange(-capacity)
+```
+
+```{r merge complete and planned battery generators}
+library(sf)
+ merged_df |>
+    st_as_sf(coords = c("Longitude", "Latitude"),
+                          crs = 4326) |>
+   st_write("current and planned generators.gpkg")
+```
+
+```{r}
+library(ggplot2)
+merged_df |>
+  filter(
+    !is.na(`Status`) &
+      # `Technology` == "Batteries" &
+      # `Status` %in% c(
+      #   "(TS) Construction complete, but not yet in commercial operation",
+      #   "(OP) Operating",
+      #   "(V) Under construction, more than 50 percent complete",
+      #   "(U) Under construction, less than or equal to 50 percent complete"
+      # )  &
+      `Plant State` %in% c(
+        "TX",
+        "CA",
+        "MA",
+        "CT",
+        "RI",
+        "ME",
+        "VT",
+        "NH"
+      )
+  ) |>
+  group_by(`Plant State`, `Status`) |>
+  summarise(.groups = "keep", `Total Nameplate Capacity (MW)` = sum(`Nameplate Capacity (MW)`)) |>
+  arrange(desc(`Total Nameplate Capacity (MW)`)) |>
+  ggplot(aes(x = `Total Nameplate Capacity (MW)`, color = `Status`)) +
+  geom_density() +
+  scale_x_continuous(trans = "log10") +
+  theme(legend.position = "bottom", legend.direction = "vertical")
+```
+```{r}
+merged_df |>
+  filter(`Energy Source Code` == "MWH") |>
+  # Calculate state totals for sorting
+  group_by(`Plant State`) |>
+  mutate(state_total = sum(`Nameplate Capacity (MW)`)) |>
+  # Extract short code and long status
+  mutate(
+    short_code = ifelse(is.na(`Status`), NA_character_,
+      gsub("^\\(([A-Za-z]+)\\).*$", "\\1", `Status`)
+    ),
+    long_status = ifelse(is.na(`Status`), NA_character_,
+      gsub("^\\([A-Za-z]+\\)\\s*", "", `Status`)
+    )
+  ) |>
+  # Group by state, short code, and long status
+  group_by(`Plant State`, short_code, long_status) |>
+  summarize(
+    capacity = sum(`Nameplate Capacity (MW)`),
+    state_total = first(state_total),
+    .groups = "drop"
+  ) |>
+  # Sort by state total (descending), then by capacity within state
+  arrange(-state_total, `Plant State`, -capacity) |>
+  # Reorganize columns as requested: state, short code, capacity, everything else except state_total
+  select(`Plant State`, short_code, capacity, long_status, everything(), -state_total)
+```
