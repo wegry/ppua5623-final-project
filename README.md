@@ -1,4 +1,4 @@
-# Northeastern University PPUA 5263 Final Project
+# Northeastern University PPUA 5263 Final
 
 ## Methodology
 
@@ -38,6 +38,8 @@ The biggest limitation of the data is how predictive future data is. For BESS ge
 
 ### Maps
 
+The <a href="#video-animation">video</a> below includes the whole continental US.
+
 <figure>
   <img src="./media/gridded_2.png" alt="Texas Battery Capacity Map">
   <figcaption>Figure 1: Texas Battery Capacity (2019-2025). In 2019, Texas started with a smattering of batteries mostly around Midland. By 2023, after the January 2021 winter storm, Houston, Austin, and Dallas-Fort Worth all had significant storage nearby. By 2025, Texas is on track to have more battery capacity than California.</figcaption>
@@ -60,7 +62,6 @@ The biggest limitation of the data is how predictive future data is. For BESS ge
 
 ### Video Animation
 
-<video width="640" height="480" controls>
-  <source src="./media/temporal_animation.mp4" type="video/mp4">
-  Your browser does not support the video tag.
-</video>
+_mp4s stored with Git LFS don't seem to display in READMEs...below is a link to the video file within the repo._
+
+![Link](https://github.com/wegry/ppua5623-final/blob/main/media/temporal_animation.mp4?raw=true)
